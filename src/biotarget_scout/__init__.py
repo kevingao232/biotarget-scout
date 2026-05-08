@@ -1,0 +1,1 @@
+"""BioTarget Scout package."""
