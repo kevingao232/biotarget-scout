@@ -17,6 +17,7 @@ class _Resp:
 class _Client:
     def __init__(self, payload):
         self.payload = payload
+        self.calls = 0
 
     def __enter__(self):
         return self
@@ -25,6 +26,10 @@ class _Client:
         return False
 
     def get(self, *args, **kwargs):
+        if isinstance(self.payload, tuple):
+            out = self.payload[self.calls]
+            self.calls += 1
+            return _Resp(out)
         return _Resp(self.payload)
 
 
@@ -41,3 +46,20 @@ def test_gtex_expression_empty_on_error(monkeypatch):
     omics.gtex_expression.cache_clear()
     monkeypatch.setattr(omics.httpx, "Client", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("x")))
     assert omics.gtex_expression("PCSK9") == {}
+
+
+def test_gtex_expression_two_hop_lookup(monkeypatch):
+    omics.gtex_expression.cache_clear()
+    payloads = (
+        {"data": [{"gencodeId": "ENSG00000169174.12"}]},
+        {
+            "data": [
+                {"tissueSiteDetailId": "Liver", "median": 30.1},
+                {"tissueSiteDetailId": "Artery_Aorta", "median": 5.4},
+            ]
+        },
+    )
+    monkeypatch.setattr(omics.httpx, "Client", lambda **kwargs: _Client(payloads))
+    result = omics.gtex_expression("PCSK9")
+    assert "Liver" in result
+    assert result["Liver"] == 30.1

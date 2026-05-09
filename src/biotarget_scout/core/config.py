@@ -13,6 +13,7 @@ class Settings(BaseModel):
     xai_api_key: str = Field(default=os.getenv("XAI_API_KEY", ""))
     ncbi_email: str = Field(default=os.getenv("NCBI_EMAIL", "you@example.com"))
     ncbi_api_key: str = Field(default=os.getenv("NCBI_API_KEY", ""))
+    omim_api_key: str = Field(default=os.getenv("OMIM_API_KEY", ""))
     request_timeout_seconds: int = Field(default=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "20")))
 
 

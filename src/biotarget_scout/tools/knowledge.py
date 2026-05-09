@@ -11,6 +11,7 @@ def uniprot_lookup(gene_symbol: str) -> UniprotResult:
     settings = get_settings()
     gene_symbol = gene_symbol.upper().strip()
     url = "https://rest.uniprot.org/uniprotkb/search"
+    # We constrain to reviewed Swiss-Prot entries so annotations are higher quality for interview demos.
     params = {"query": f"gene_exact:{gene_symbol} AND reviewed:true", "format": "json", "size": 1}
     try:
         with httpx.Client(timeout=settings.request_timeout_seconds) as client:
@@ -48,14 +49,50 @@ def uniprot_lookup(gene_symbol: str) -> UniprotResult:
 
 @lru_cache(maxsize=256)
 def omim_lookup(gene_symbol: str) -> list[OmimEntry]:
-    # OMIM API is paid/restricted for full use. This placeholder returns empty data gracefully.
-    _ = gene_symbol
-    return []
+    settings = get_settings()
+    api_key = getattr(settings, "omim_api_key", "")
+    if not api_key:
+        # OMIM requires an API key; graceful empty return avoids breaking downstream agents.
+        return []
+
+    query = gene_symbol.strip().upper()
+    try:
+        with httpx.Client(timeout=settings.request_timeout_seconds) as client:
+            # OMIM endpoint returns nested "entryList" objects. We request JSON for predictable parsing.
+            res = client.get(
+                "https://api.omim.org/api/entry/search",
+                params={
+                    "search": query,
+                    "apiKey": api_key,
+                    "format": "json",
+                    "limit": 10,
+                    "include": "geneMap",
+                },
+            )
+            res.raise_for_status()
+            payload = res.json()
+    except Exception:
+        return []
+
+    entries: list[OmimEntry] = []
+    for row in payload.get("omim", {}).get("searchResponse", {}).get("entryList", []):
+        entry = row.get("entry", {})
+        mim_number = str(entry.get("mimNumber", ""))
+        title = str(entry.get("titles", {}).get("preferredTitle", "")).strip()
+        phenotypes = []
+        for phenotype in entry.get("geneMap", {}).get("phenotypeMapList", []):
+            phenotype_text = phenotype.get("phenotypeMap", {}).get("phenotype")
+            if phenotype_text:
+                phenotypes.append(str(phenotype_text))
+        if mim_number and title:
+            entries.append(OmimEntry(mim_number=mim_number, title=title, diseases=phenotypes))
+    return entries
 
 
 @lru_cache(maxsize=256)
 def string_interactions(gene_symbol: str, limit: int = 10) -> list[Interaction]:
     settings = get_settings()
+    gene_symbol = gene_symbol.upper().strip()
     try:
         with httpx.Client(timeout=settings.request_timeout_seconds) as client:
             res = client.get(
