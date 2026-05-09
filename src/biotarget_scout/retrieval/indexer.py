@@ -11,7 +11,8 @@ Both lists are aligned by PMID so we can fuse rankings in ``hybrid.retrieve``.
 from __future__ import annotations
 
 import re
-from typing import Any
+from enum import Enum
+from typing import Any, Literal
 
 import chromadb
 from chromadb.utils import embedding_functions
@@ -21,6 +22,16 @@ from biotarget_scout.models.schemas import PubMedPaper
 
 # Chroma collection names must be 3–512 chars from [a-zA-Z0-9._-].
 _DEFAULT_COLLECTION = "bio_literature"
+
+
+class IndexMode(str, Enum):
+    """
+    Ephemeral: rebuild or isolate index per request (dev / demos).
+    Persistent + delta: long-lived Chroma store; upsert only touched PMIDs per fetch.
+    """
+
+    ephemeral_per_request = "ephemeral_per_request"
+    persistent_with_delta = "persistent_with_delta"
 
 
 def _tokenize(text: str) -> list[str]:
@@ -92,6 +103,9 @@ class LiteratureIndex:
     def get_paper(self, pmid: str) -> PubMedPaper | None:
         return self._papers.get(pmid)
 
+    def list_pmids(self) -> list[str]:
+        return sorted(self._papers.keys())
+
     def _rebuild_bm25(self) -> None:
         if not self._texts:
             self._bm25 = None
@@ -113,7 +127,12 @@ class LiteratureIndex:
         self._texts.clear()
         self._bm25 = None
 
-    def add_papers(self, papers: list[PubMedPaper], replace_existing: bool = True) -> int:
+    def add_papers(
+        self,
+        papers: list[PubMedPaper],
+        replace_existing: bool = True,
+        chroma_upsert_mode: Literal["full", "delta"] = "full",
+    ) -> int:
         """
         Merge papers into the in-memory map, then refresh Chroma + BM25 in one pass.
 
@@ -149,20 +168,29 @@ class LiteratureIndex:
         # Stable order: same PMID always maps to same BM25 row index.
         self._pmids = sorted(self._papers.keys())
         self._texts = [_doc_text(self._papers[pid]) for pid in self._pmids]
+
+        if chroma_upsert_mode == "delta":
+            candidate_ids = sorted(batch.keys())
+        else:
+            candidate_ids = list(self._pmids)
+
+        upsert_ids: list[str] = []
+        documents: list[str] = []
         metadatas: list[dict[str, Any]] = []
-        for pid in self._pmids:
-            p = self._papers[pid]
+        for pid in candidate_ids:
+            p = self._papers.get(pid)
+            if p is None:
+                continue
+            upsert_ids.append(pid)
+            documents.append(_doc_text(p))
             metadatas.append(
                 {
                     "title": (p.title or "")[:2000],
                     "pub_year": int(p.pub_year) if p.pub_year is not None else -1,
                 }
             )
-        self._collection.upsert(
-            ids=self._pmids,
-            documents=self._texts,
-            metadatas=metadatas,
-        )
+        if upsert_ids:
+            self._collection.upsert(ids=upsert_ids, documents=documents, metadatas=metadatas)
         self._rebuild_bm25()
         return accepted
 
