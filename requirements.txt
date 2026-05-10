@@ -2,6 +2,7 @@ langchain
 langgraph
 openai
 anthropic
+spacy>=3.7,<3.9
 scispacy
 biopython
 chromadb

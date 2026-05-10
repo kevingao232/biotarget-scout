@@ -45,7 +45,6 @@ async def run_literature(
             papers = traced_call(
                 "pubmed_search",
                 lambda: pubmed_search(query.pubmed_query_string, max_results=max_pubmed),
-                extra={"query": query.pubmed_query_string},
             )
             fetched = len(papers)
 
@@ -53,19 +52,16 @@ async def run_literature(
                 traced_call(
                     "literature_delta_upsert",
                     lambda: upsert_new_papers_only(idx, papers),
-                    extra={"new_batch": len(papers)},
                 )
             else:
                 traced_call(
                     "literature_full_index",
                     lambda: idx.add_papers(papers, chroma_upsert_mode="full"),
-                    extra={"count": len(papers)},
                 )
 
             hits = traced_call(
                 "hybrid_retrieve",
                 lambda: retrieve(idx, query.pubmed_query_string, top_k=retrieve_top_k),
-                extra={"top_k": retrieve_top_k},
             )
 
             blob = "\n".join(f"{p.title}\n{p.abstract}" for p in hits)

@@ -6,6 +6,7 @@ from biotarget_scout.models.schemas import (
     EvidenceBundle,
     EvidenceSignals,
     HypothesisReport,
+    LegStatus,
     NarrativeDraft,
     StructuredQuery,
 )
@@ -29,6 +30,30 @@ def assemble_report(
         caveats.append(f"KG leg: {bundle.kg_detail}")
     if bundle.omics_detail:
         caveats.append(f"Omics leg: {bundle.omics_detail}")
+
+    kg = bundle.kg
+    om = bundle.omics
+    if kg and bundle.kg_status == LegStatus.ok and kg.omim_hits == 0:
+        caveats.append(
+            "OMIM returned no rows for this gene: verify OMIM_API_KEY and network access "
+            "(geneMap + entry search are both attempted in logs)."
+        )
+    if om and bundle.omics_status == LegStatus.ok and not om.top_tissues:
+        caveats.append(
+            "GTEx median tissue expression was empty after symbol → gencode resolution; "
+            "tissue context may be missing (see api_request logs for gtexportal.org)."
+        )
+    if (
+        kg
+        and bundle.kg_status == LegStatus.ok
+        and not (kg.existing_drugs or [])
+        and bundle.literature
+        and len(bundle.literature.papers) > 0
+    ):
+        caveats.append(
+            "No drug names were inferred from retrieved abstracts; add a drug database or richer chemical NER "
+            "for structured pharmacology."
+        )
 
     supporting = bundle.literature.papers if bundle.literature else []
     kg_facts: dict = {}

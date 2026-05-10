@@ -34,7 +34,14 @@ class PubMedPaper(BaseModel):
 
 class UniprotResult(BaseModel):
     gene_symbol: str
-    uniprot_id: str | None = None
+    uniprot_id: str | None = Field(
+        default=None,
+        description="Canonical UniProt accession (Swiss-Prot when query uses reviewed + human).",
+    )
+    ensembl_gene_id: str | None = Field(
+        default=None,
+        description="ENSG… (no version suffix) from UniProt cross-refs; used for GTEx.",
+    )
     protein_name: str | None = None
     function: str | None = None
     organism: str | None = None

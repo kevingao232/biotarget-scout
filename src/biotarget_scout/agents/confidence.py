@@ -51,7 +51,7 @@ def bundle_to_signals(bundle: EvidenceBundle, *, pubmed_candidates_fetched: int 
 def score_confidence(signals: EvidenceSignals) -> float:
     score = 0.0
     if signals.paper_count:
-        score += min(0.35, 0.07 * signals.paper_count)
+        score += min(0.38, 0.075 * signals.paper_count)
     if signals.has_uniprot_id:
         score += 0.15
     if signals.omim_entry_count:
@@ -70,4 +70,21 @@ def score_confidence(signals: EvidenceSignals) -> float:
         score *= 0.85
     if signals.paper_count == 0:
         score = min(score, 0.12)
+        return float(max(0.0, min(1.0, score)))
+
+    # Penalize missing genetic / tissue context when literature is strong (honest multi-source score).
+    # Missing OMIM still matters, but should not dominate when literature, UniProt,
+    # STRING, and GTEx are all present (OMIM outages vs true lack of genetics).
+    if signals.paper_count >= 2 and signals.has_uniprot_id and signals.omim_entry_count == 0:
+        if signals.has_gtex_data and signals.string_edge_count >= 2:
+            score *= 0.93
+        elif signals.has_gtex_data:
+            score *= 0.90
+        else:
+            score *= 0.78
+    if signals.paper_count >= 2 and not signals.has_gtex_data:
+        score *= 0.82
+    if signals.paper_count >= 3 and signals.omim_entry_count == 0 and not signals.has_gtex_data:
+        score *= 0.88
+
     return float(max(0.0, min(1.0, score)))

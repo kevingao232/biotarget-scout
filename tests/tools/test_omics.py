@@ -63,3 +63,34 @@ def test_gtex_expression_two_hop_lookup(monkeypatch):
     result = omics.gtex_expression("PCSK9")
     assert "Liver" in result
     assert result["Liver"] == 30.1
+
+
+def test_gtex_median_endpoint_uses_dataset_param(monkeypatch):
+    """Second HTTP call must hit medianGeneExpression with datasetId (gtex_v8)."""
+    omics.gtex_expression.cache_clear()
+    urls: list[str] = []
+
+    class _TraceClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, **kwargs):
+            urls.append(url)
+            params = kwargs.get("params") or {}
+            if "reference/gene" in url:
+                return _Resp({"data": [{"gencodeId": "ENSG1.1"}]})
+            if "medianGeneExpression" in url:
+                assert params.get("datasetId") == omics._GTEX_DATASET
+                return _Resp({"data": [{"tissueSiteDetailId": "Brain", "median": 1.2}]})
+            raise AssertionError(f"unexpected url {url}")
+
+    monkeypatch.setattr(omics.httpx, "Client", lambda **kwargs: _TraceClient())
+    out = omics.gtex_expression("PCSK9")
+    assert any("medianGeneExpression" in u for u in urls)
+    assert out.get("Brain") == 1.2

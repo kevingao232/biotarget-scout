@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BioTarget Scout — Test UI</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>BioTarget Scout</h1>
+      <p class="muted">
+        Ask in plain language. We infer a <strong>gene symbol</strong> (NER or common all-caps pattern) and send your full
+        question as context to the pipeline (<code>POST /api/v1/hypothesis</code> with a <code>query</code> field).
+      </p>
+
+      <form id="form" class="card">
+        <label class="block">
+          Your question
+          <textarea
+            name="query"
+            rows="4"
+            required
+            maxlength="4000"
+            placeholder="e.g. What is known about PCSK9 in cardiovascular disease and LDL?"
+          >What does PCSK9 do in cardiovascular disease?</textarea>
+        </label>
+        <details class="advanced">
+          <summary>Advanced (optional)</summary>
+          <label>
+            Index mode
+            <select name="index_mode">
+              <option value="ephemeral_per_request" selected>ephemeral_per_request</option>
+              <option
+                value="persistent_with_delta"
+                title="Requires shared_index on server; not wired in this UI yet"
+              >
+                persistent_with_delta
+              </option>
+            </select>
+          </label>
+          <label>Leg retries <input name="leg_retries" type="number" min="0" max="5" value="2" /></label>
+        </details>
+        <button type="submit" id="btn">Run analysis</button>
+      </form>
+
+      <p id="status" class="muted" aria-live="polite"></p>
+      <pre id="out" class="out" hidden></pre>
+    </main>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

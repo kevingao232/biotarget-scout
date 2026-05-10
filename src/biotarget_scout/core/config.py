@@ -20,3 +20,11 @@ class Settings(BaseModel):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+def ensure_hf_hub_token() -> None:
+    """Map ``HF_TOKEN`` / ``HUGGINGFACE_HUB_TOKEN`` so Hugging Face Hub sees a token before embedding downloads."""
+    tok = (os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN", "")).strip()
+    if tok:
+        os.environ.setdefault("HF_TOKEN", tok)
+        os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", tok)

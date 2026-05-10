@@ -60,6 +60,57 @@ def test_string_interactions_error(monkeypatch):
     assert knowledge.string_interactions("PCSK9") == []
 
 
+def test_string_interactions_dedupes_partner_max_score(monkeypatch):
+    knowledge.string_interactions.cache_clear()
+    rows = [
+        {"preferredName_A": "PCSK9", "preferredName_B": "APOB", "score": 0.5},
+        {"preferredName_A": "PCSK9", "preferredName_B": "APOB", "score": 0.99},
+        {"preferredName_A": "PCSK9", "preferredName_B": "GOLPH3", "score": 0.7},
+    ]
+
+    class _StringClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, *a, **k):
+            return _Resp(rows)
+
+    monkeypatch.setattr(knowledge.httpx, "Client", lambda **kwargs: _StringClient())
+    out = knowledge.string_interactions("PCSK9", limit=10)
+    by_partner = {i.partner.upper(): i.score for i in out}
+    assert by_partner["APOB"] == 0.99
+    assert len(out) == 2
+
+
+def test_string_interactions_drop_immunoglobulin_variable_genes(monkeypatch):
+    knowledge.string_interactions.cache_clear()
+    rows = [
+        {"preferredName_A": "PCSK9", "preferredName_B": "APOB", "score": 0.9},
+        {"preferredName_A": "PCSK9", "preferredName_B": "IGHV3-16", "score": 0.95},
+        {"preferredName_A": "PCSK9", "preferredName_B": "IGKV1-33", "score": 0.94},
+    ]
+
+    class _StringClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, *a, **k):
+            return _Resp(rows)
+
+    monkeypatch.setattr(knowledge.httpx, "Client", lambda **kwargs: _StringClient())
+    out = knowledge.string_interactions("PCSK9", limit=10)
+    partners = {i.partner.upper() for i in out}
+    assert "APOB" in partners
+    assert "IGHV3-16" not in partners
+    assert "IGKV1-33" not in partners
+
+
 def test_omim_lookup_without_key(monkeypatch):
     knowledge.omim_lookup.cache_clear()
     class _S:
@@ -93,8 +144,62 @@ def test_omim_lookup_with_key(monkeypatch):
             }
         }
     }
+
+    class _OmimClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, **kwargs):
+            if "/api/entry/search" in url:
+                return _Resp(payload)
+            if "/api/geneMap/search" in url:
+                return _Resp({"omim": {"listResponse": {"geneMapList": []}}})
+            return _Resp({"omim": {"geneMapList": []}})
+
     monkeypatch.setattr(knowledge, "get_settings", lambda: _S())
-    monkeypatch.setattr(knowledge.httpx, "Client", lambda **kwargs: _Client(payload))
+    monkeypatch.setattr(knowledge.httpx, "Client", lambda **kwargs: _OmimClient())
     out = knowledge.omim_lookup("PCSK9")
     assert len(out) == 1
     assert out[0].mim_number == "603776"
+
+
+def test_omim_gene_map_parsed_when_present(monkeypatch):
+    knowledge.omim_lookup.cache_clear()
+    class _S:
+        omim_api_key = "demo"
+        request_timeout_seconds = 10
+
+    gm = {
+        "omim": {
+            "geneMapList": [
+                {
+                    "geneMap": {
+                        "mimNumber": 607786,
+                        "geneSymbol": "PCSK9",
+                        "titles": {"preferredTitle": "PCSK9 GENE"},
+                        "phenotypeMapList": [{"phenotypeMap": {"phenotype": "Hypercholesterolemia"}}],
+                    }
+                }
+            ]
+        }
+    }
+
+    class _GmOnly:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, **kwargs):
+            assert "geneMap" in url
+            return _Resp(gm)
+
+    monkeypatch.setattr(knowledge, "get_settings", lambda: _S())
+    monkeypatch.setattr(knowledge.httpx, "Client", lambda **kwargs: _GmOnly())
+    out = knowledge.omim_lookup("PCSK9")
+    assert len(out) == 1
+    assert out[0].mim_number == "607786"

@@ -21,3 +21,19 @@ def test_rich_signals_increase_score():
         plddt=85.0,
     )
     assert score_confidence(high) > score_confidence(low)
+
+
+def test_missing_omim_and_gtex_penalizes_strong_literature():
+    with_omim_gtex = EvidenceSignals(
+        paper_count=5,
+        has_uniprot_id=True,
+        omim_entry_count=2,
+        has_gtex_data=True,
+    )
+    missing = EvidenceSignals(
+        paper_count=5,
+        has_uniprot_id=True,
+        omim_entry_count=0,
+        has_gtex_data=False,
+    )
+    assert score_confidence(missing) < score_confidence(with_omim_gtex)

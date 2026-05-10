@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biotarget-scout"
+version = "0.1.0"
+description = "Multi-agent biomedical hypothesis pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+# Runtime deps: use `pip install -r requirements.txt` then `pip install -e .`
+
+[tool.setuptools.packages.find]
+where = ["src"]

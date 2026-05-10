@@ -1,0 +1,33 @@
+Metadata-Version: 2.4
+Name: biotarget-scout
+Version: 0.1.0
+Summary: Multi-agent biomedical hypothesis pipeline
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+
+# BioTarget Scout
+
+Multi-agent biomedical hypothesis pipeline (literature + KG + omics), with an optional **local FastAPI server** and **test UI**.
+
+## Quick start (API + browser UI)
+
+```bash
+cd biotarget-scout
+python -m pip install -r requirements.txt
+python -m pip install -e .
+python -m uvicorn biotarget_scout.api.app:app --reload --host 127.0.0.1 --port 8000
+```
+
+- **UI:** http://127.0.0.1:8000/
+- **OpenAPI:** http://127.0.0.1:8000/docs  
+- **Health:** `GET http://127.0.0.1:8000/api/v1/health`  
+- **Analyze:** `POST http://127.0.0.1:8000/api/v1/hypothesis` with JSON body `{ "target_gene", "disease_context", "index_mode"?, "leg_retries"? }`
+
+Frontend ↔ API layout and CORS notes: [`docs/frontend-api.md`](docs/frontend-api.md).  
+Broader project docs: [`docs/README.md`](docs/README.md), system flow: [`docs/system-flow.md`](docs/system-flow.md).
+
+## Tests
+
+```bash
+python -m pytest -q
+```

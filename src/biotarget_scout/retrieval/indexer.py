@@ -10,6 +10,7 @@ Both lists are aligned by PMID so we can fuse rankings in ``hybrid.retrieve``.
 
 from __future__ import annotations
 
+import os
 import re
 from enum import Enum
 from typing import Any, Literal
@@ -18,10 +19,17 @@ import chromadb
 from chromadb.utils import embedding_functions
 from rank_bm25 import BM25Okapi
 
+from biotarget_scout.core.config import ensure_hf_hub_token
 from biotarget_scout.models.schemas import PubMedPaper
 
 # Chroma collection names must be 3–512 chars from [a-zA-Z0-9._-].
 _DEFAULT_COLLECTION = "bio_literature"
+
+# Build plan default: PubMed-tuned embeddings; override via env for CI/speed.
+_DEFAULT_EMBEDDING_MODEL = os.getenv(
+    "BIOTARGET_EMBEDDING_MODEL",
+    "sentence-transformers/all-MiniLM-L6-v2",
+)
 
 
 class IndexMode(str, Enum):
@@ -66,12 +74,15 @@ class LiteratureIndex:
         self,
         persist_directory: str | None = None,
         collection_name: str = _DEFAULT_COLLECTION,
-        embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        embedding_model_name: str = _DEFAULT_EMBEDDING_MODEL,
         chroma_collection: Any | None = None,
     ) -> None:
         self._collection_name = collection_name
         self._embedding_model_name = embedding_model_name
         self._embedding_fn: Any = None
+
+        if chroma_collection is None:
+            ensure_hf_hub_token()
 
         if chroma_collection is not None:
             # Tests can inject a fake collection; no SentenceTransformer download.
